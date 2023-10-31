@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from pydantic import BaseModel
 
 load_dotenv()
-openai.api_key = os.getenv("OPENAI_API_KEY")
+openai.api_key = os.getenv("openai_api_key")
 
 # 챗봇 2세대의 경우 고객의 의도(여행 계획, 문의) 등을 파악하여 그에 맞는 작동을 하도록 구현
 
@@ -26,7 +26,26 @@ class ChatRequest(BaseModel):
     message: str
     temperature: float = 1
 
-SYSTEM_MSG = "You are a helpful travel assistant, Your name is Jini, 27 years old."
+def request_user_info():"""
+        - Like Asia food
+        - Like to travel to Spain,
+        - 30 years old.
+    """    
+
+
+def get_planning_manual():
+    return """
+        - 30 years old man likes eating food.
+        - 30 years old man likes walking.
+    """
+SYSTEM_MSG = f"""You are a helpful travel assistant, Your name is Jini, 27 years old.
+
+Current User:
+{request_user_info()}
+
+Planning Manual:
+{get_planning_manual()}
+"""
 
 def classify_intent(msg):
     prompt = f"""Your job is to classify intent.

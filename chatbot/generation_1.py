@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from pydantic import BaseModel
 
 load_dotenv()
-openai.api_key = os.getenv("openai_api_key")
+openai.api_key = os.getenv("OPENAI_API_KEY")
 
 print(sys.version)
 
