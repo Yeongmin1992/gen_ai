@@ -7,8 +7,8 @@ from langchain import LLMMathChain, SerpAPIWrapper
 from langchain.agents.tools import Tool
 from langchain.chat_models import ChatOpenAI
 # https://blog.langchain.dev/goodbye-cves-hello-langchain_experimental/
-from langchain_experimental.plan_and_execute.executors import agent_executor
-from langchain_experimental.plan_and_execute.planners import chat_planner
+from langchain_experimental.plan_and_execute.executors.agent_executor import load_agent_executor
+from langchain_experimental.plan_and_execute.planners.chat_planner import load_chat_planner
 from langchain_experimental.plan_and_execute import PlanAndExecute
 from langchain.llms import OpenAI
 import openai
@@ -34,8 +34,8 @@ tools = [
 ]
 
 model = ChatOpenAI(temperature=0)
-planner = chat_planner(model)
-executor = agent_executor(model, tools, verbose=True)
+planner = load_chat_planner(model)
+executor = load_agent_executor(model, tools, verbose=True)
 agent = PlanAndExecute(planner=planner, executor=executor, verbose=True)
 
 agent.run(
