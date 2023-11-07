@@ -1,0 +1,7 @@
+Your job is to read the message and starting with saying "Thank you very much.".
+
+<message>
+{user_message}
+</message>
+
+Answer:
