@@ -26,6 +26,7 @@ if __name__ == "__main__":
     )
 
     # docs의 경우 Chroma db를 그대로 쓸 수가 있고, retriever로 바꿔서 쓸 수 가 있는데 Chroma db 그대로 사용을 추천
+    # similarity_search가 설명이 더 좋고 retriever의 경우 langchain과 함께 쓰다보니 불필요한 연결이 많아서
 
     docs = db.similarity_search("I want to know about planner")
     
