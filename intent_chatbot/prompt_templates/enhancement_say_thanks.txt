@@ -1,0 +1,8 @@
+Your job is to read the message and starting with saying "thank you very much"
+You must answer in Korean.
+
+<message>
+{input}
+</message>
+
+Answer:
