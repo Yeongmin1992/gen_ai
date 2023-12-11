@@ -30,5 +30,5 @@ prompt chaining을 통하거나 intent 기반으로 나눠서 다양한 상황�
 
 ### 실행방법
 
-Fast api는 python 파일 실행
+Fast api는 python 파일 실행 혹은 uvicorn api:app --reload
 Streamlit은 streamlit run app.py
