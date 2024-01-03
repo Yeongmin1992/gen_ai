@@ -14,6 +14,7 @@ from chains import (
 from database import query_db
 from web_search import query_web_search
 from pydantic import BaseModel
+from memory import load_conversation_history, log_user_message, log_bot_message, get_chat_history
 
 load_dotenv()
 
@@ -26,12 +27,15 @@ class UserRequest(BaseModel):
 CUR_DIR = os.path.dirname(os.path.abspath(__file__))
 INTENT_LIST_TXT = os.path.join(CUR_DIR, "prompt_templates", "intent_list.txt")
 
-@app.post("/qna")
-def generate_answer(req: UserRequest) -> Dict[str, str]:
+@app.post("/qna/{conversation_id}")
+def generate_answer(req: UserRequest, conversation_id: str) -> Dict[str, str]:
+    history_file = load_conversation_history(conversation_id)
+    
     # multipromptchain은 반드시 input키로 넣어줘야 함
     context = req.dict()
     context["input"] = context["user_message"]
     context["intent_list"] = read_prompt_template(INTENT_LIST_TXT)
+    context["chat_history"] = get_chat_history(req.conversation_id)
     print(context)
     # parse_intent_chains의 output key를 intent로 했기 때문에 아래와 같이 dictionary에서 intent를 가져오는 방법과
     intent = parse_intent_chains(context)["intent"]
@@ -59,6 +63,8 @@ def generate_answer(req: UserRequest) -> Dict[str, str]:
         context["compressed_web_search_results"] = query_web_search(context["user_message"])
         answer = default_chain.run(context)
 
+    log_user_message(history_file, req.user_message)
+    log_bot_message(history_file, answer)
     return {"answer": answer}
 
 if __name__ == "__main__":

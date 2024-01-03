@@ -8,8 +8,6 @@ Your job is to read the <message>, Answer the question with <context> very detai
 {compressed_web_search_results}
 </web_saerch_results>
 
-<message>
-{user_message}
-</message>
-
+{chat_history}
+User: {user_message}
 Answer:
