@@ -4,6 +4,7 @@ import openai
 from crewai import Agent, Task, Crew
 from crewai.process import Process
 from langchain_openai import ChatOpenAI
+from IPython.display import display, Markdown
 
 load_dotenv()
 
@@ -51,8 +52,18 @@ ai_impact_crew = Crew(
 
 # Process 정의
 # Process 정의가 없으면 agent들이 알아서 작업 수행 및 흐름 관리 > process로 컨트롤 가능
+ai_impact_crew = Crew(
+    agents=[outline_gnerator, writer],
+    tasks=[outline_task, wrting_task],
+    verbose=True,
+    Process=Process.sequentail
+)
 
 
 if __name__ == "__main__":
     result = ai_impact_crew.kickoff()
     print(result)
+    result = ai_impact_crew.kickoff()
+    print(result)
+    # 이렇게 하면 마크다운을 보기좋게 확인 가능
+    display(Markdown(result.raw))
