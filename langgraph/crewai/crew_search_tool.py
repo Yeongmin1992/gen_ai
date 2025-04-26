@@ -13,6 +13,7 @@ from crewai_tools import (
 load_dotenv()
 
 from langchain_openai import ChatOpenAI
+from IPython.display import display, Markdown
 
 llm = ChatOpenAI(model = "gpt-4o-mini")
 
@@ -59,7 +60,7 @@ write = Task(
     테크 뉴스레터이므로 전문적인 용어를 사용해도 괜찮습니다.""",
     expected_output="최신 기술 관련 소식을 재밌는 말투로 소개하는 4문단짜리 마크다운 형식 뉴스레터",
     agent=writer,
-    output_filter=r'/mnt/d/ym/new_post.md'  # The final blog post wiil be saved here 
+    output_file=r'/mnt/d/ym/new_post.md'  # The final blog post wiil be saved here 
 )
 
 # Asseble a crew with planning enabled
@@ -73,3 +74,6 @@ crew = Crew(
 
 # Execute tasks
 result = crew.kickoff()
+
+if __name__ == "__main__":
+    display(Markdown(result.raw))
