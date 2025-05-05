@@ -53,10 +53,10 @@ ai_impact_crew = Crew(
 # Process 정의
 # Process 정의가 없으면 agent들이 알아서 작업 수행 및 흐름 관리 > process로 컨트롤 가능
 ai_impact_crew = Crew(
-    agents=[outline_gnerator, writer],
-    tasks=[outline_task, wrting_task],
+    agents=[outline_generator, writer],
+    tasks=[outline_task, writing_task],
     verbose=True,
-    Process=Process.sequentail
+    Process=Process.sequential
 )
 
 
