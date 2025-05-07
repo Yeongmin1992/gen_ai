@@ -42,3 +42,125 @@ print(prompt)
 
 # StringPromptValue 객체
 print(prompt.invoke({"개수":6, "재료":"사과, 잼"}))
+
+from langchain_core.prompts import ChatPromptTemplate
+
+chat_template = ChatPromptTemplate.from_messages(
+    {   
+        # SystemMessage: 유용한 챗봇이라는 역할과 이름 부여
+        ("system", "You are a helpful AI bot. Your name is {name}."),
+        # HumamMessage와 AIMessage: 서로 안부를 묻고 답하는 대화 히스토리 주입
+        ("human", "Hello, how are you doing?"),
+        ("ai", "I'm doing well, thanks!"),
+        # HumanMessage로 사용자가 입력한 프롬프트 전달
+        ("human", "{user_input}")
+    }
+)
+
+messages = chat_template.format_messages(name="Bob", user_input="What is your name?")
+print(messages)
+
+# LCEL(Lang Chain Expression Language)로 Chain 구축하기
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_openai import ChatOpenAI
+
+# 프롴프트 템플릿 설정
+prompt = ChatPromptTemplate.from_template("tell me a short joke about {topic}")
+
+# LLM 호출
+model = ChatOpenAI(model="gpt-4o-mini")
+
+# LCEL로 프롬프트 템플릿 > LLM > 츨력 파서 연결하기
+# StrOutputParser를 사용하면 위의 AIMessage 객체에서 나온 다양한 값중 content 값만 string으로 보기좋게 나옴
+chain = prompt | model | StrOutputParser()
+
+# invoke 함수로 chain 실행하기
+chain.invoke({"tokpic": "ice cream"})
+
+# chain 선언
+model = ChatOpenAI(model="gpt-4o")
+prompt = ChatPromptTemplate.from_template("tell me a joke about {topic}")
+
+# Chain의 stream() 함수를 통해 스트리밍 기능 추가
+for s in chain.stream({"topic":"bears"}):
+    print(s.content, end="", flush=True)
+
+# OutputParser 실습
+from langchain_openai import ChatOpenAI
+from langchain.prompts import HumanMessagePromptTemplate
+from langchain_core.messages import SystemMessage
+from langchain_core.prompts import ChatPromptTemplate
+
+llm = ChatOpenAI(
+    model_name="gpt-4o-mini",
+    temperature=0
+)
+
+# ChatPromptTemplate에 SystemMessage로 LLM의 역할과 출력 형식 지정
+# output parser 없이 답변 형식을 지정 할 경우
+chat_template = ChatPromptTemplate.from_messages(
+    [
+        SystemMessage(
+            content=(
+                "너는 영화 전문가 AI야. 사용자가 원하는 장르의 영화를 리스트 형태로 추천해줘."
+                'ec) Query: SF 영화 3개 추천해줘 / 답변 : ["인터스텔라", "스페이스오디세이", "혹성탈출"]'
+            )
+        ),
+        HumanMessagePromptTemplate.from_template("{text}")
+    ]
+)
+model = ChatOpenAI(model="gpt-40-mini")
+chain = chat_template | model
+chain.invoke("액션")
+
+# output parser를 사용하여 답변 형식을 지정 할 경우
+from langchain.output_parsers import CommaSeparatedListOutputParser
+from langchain.prompts import PromptTemplate
+
+# CSV 파서 선언
+output_parser = CommaSeparatedListOutputParser()
+
+# CSV 파서 작동을 위한 형식 지정 프롬프트 로드
+format_instructions = output_parser.get_format_instructions()
+# 답변 타입이 list of comma separated values라고 알아서 시스템메세지를 잘 만들어줌
+print(format_instructions)
+
+# 프롬프트 템플릿의 partial_variables에 CSV 형식 지정 프롬프트 주입
+prompt = PromptTemplate(
+    template="List {subject}. Answer in Korean \n{format_instructions}",
+    input_variables=["subject"],
+    # 요런 식으로 사용자 input 받기전 프롬프트 템플릿에 부분 변수로 넣기 가능
+    partial_variables={"format_instuction": format_instructions}
+)
+
+model = ChatOpenAI(model="gpt-4o-mini")
+
+# 프롬프트템플릿-모델-Output Parser를 체인으로 연결
+chain = prompt | model | output_parser
+chain.invoke({"subject": "공포 영화"})
+
+from typing import List
+from langchain.prompts import PromptTemplate
+from langchain_core.output_parsers import JsonOutputParser
+from langchain_core.pydantic_v1 import BaseModel, Field
+from langchain_openai import ChatOpenAI
+
+# pydantic_object의 데이터 구조를 정의합니다.
+class Country(BaseModel):
+    continent: str = Field(description="사용자가 물어본 나라가 속한 대륙")
+    population: str = Field(description="사용자가 물어본 나라의 인구(int 형식)")
+
+# JsonOutputParser를 설정하고, 프롬프트 템플릿에 format_instructions를 삽입합니다.
+parser = JsonOutputParser(pydantic_object=Country)
+
+prompt = PromptTemplate(
+    template="Answer the user query. \n{format_instructions}\n{query}\n",
+    input_variables=["query"],
+    partial_variables={"format_instructions": parser.get_format_instructions()}
+)
+
+chain = prompt | model | parser
+
+country_query = "아르헨티나는 어떤 나라야?"
+chain.invoke({"query":country_query})
