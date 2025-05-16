@@ -164,3 +164,110 @@ chain = prompt | model | parser
 
 country_query = "아르헨티나는 어떤 나라야?"
 chain.invoke({"query":country_query})
+
+# LCEL Runnable 객체에 대해 알아보기 > 파이프라인 오프레이터 좌우에 있는 태스크들은 runnable 객체이다.
+
+# 들어온 객체를 그대로 내보내는 RunnablePassthrough
+from langchain_core.runnables import RunnablePassthrough
+
+RunnablePassthrough().invoke("안녕하세요")
+
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_openai import ChatOpenAI
+from langchain_core.output_parsers import StrOutputParser
+
+prompt = ChatPromptTemplate.from_template(
+    """
+    다음 한글 문장을 프랑스어로 번역해줘
+    {sentence}
+    French Sentencd: (print from here)
+    """
+)
+
+# 사용자로 부터 입력받은 인풋을 그대로 넘김
+runnable_chain = {"sentence": RunnablePassthrough()} | prompt | model | output_parser
+runnable_chain.invoke({"sentence": "그녀는 매일 아침 책을 읽습니다."})
+
+# assign 함수를 사용하여 들어온 input에 함수를 적용할 수 있음
+(RunnablePassthrough.assign(mult=lambda x: x["num"]*3)).invoke({"num":3})
+
+# 로직 병렬실행
+from langchain_core.runnables import RunnableParallel, RunnablePassthrough
+
+runnable = RunnableParallel(
+    extra=RunnablePassthrough.assign(mult=lambda x: x["num"] * 3),
+    modified=lambda x: x["num"] + 1
+)
+
+# RunnablePassthrough로 extra는 {'num': 1, 'mult' : 3}
+# modified는 {'modified': 2} 와 같이 나옴
+runnable.invoke({"num": 1})
+
+# 사용자 정의 함수에 Runnable 객체 넣기
+def add_smile(x):
+    return x + ":)"
+
+from langchain_core.runnables import RunnableLambda
+
+add_smile = RunnableLambda(add_smile)
+
+from langchain.prompts import ChatPromptTemplate
+from langchain_openai import ChatOpenAI
+from langchain.schema.output_parser import StrOutputParser
+
+prompt_str = "{topic}의 역사에 대해 세문장으로 설명해주세요."
+prompt = ChatPromptTemplate.from_template(prompt_str)
+
+model = ChatOpenAI(model_name="gpt-4o-mini")
+
+output_parser = StrOutputParser()
+
+chain = prompt | model | output_parser
+
+from langchain_core.runnables import RunnableLambda
+
+def add_thank(x):
+    return x + " 들어주셔서 감사합니다 :)"
+
+add_thank = RunnableLambda(add_thank)
+
+chain = prompt | model | output_parser | add_thank
+chain.invoke("반도체")
+
+# RunnableParallel 알아보기
+from langchain_core.runnables import RunnableParallel, RunnablePassthrough
+
+runnable = RunnableParallel(
+    passed=RunnablePassthrough(),
+    modified=lambda x: x["num"] + 1
+)
+
+runnable.invoke({"num": 1})
+
+runnable = RunnableParallel(
+    passed=RunnablePassthrough(),
+    modified=add_thank
+)
+
+runnable.invoke("안녕하세요.")
+
+# RunnableParallel으로 여러 결과물 한번에 받기
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.runnables import RunnableParallel
+from langchain_openai import ChatOpenAI
+from langchain.schema.output_parser import StrOutputParser
+
+model = ChatOpenAI(model = 'gpt-4p-mini', max_tokens = 128, temperature = 0)
+
+history_prompt = ChatPromptTemplate.from_template("{topic}가 무엇의 약자인지 알려주세요.")
+celeb_prompt = ChatPromptTemplate.from_template("{topic} 분야의 유명인사 3명의 이름만 알려주세요.")
+
+output_parser = StrOutputParser()
+
+history_chain = history_prompt | model | output_parser
+celeb_chain = celeb_prompt | model | output_parser
+
+map_chain = RunnableParallel(history=history_chain, celeb=celeb_chain)
+
+result = map_chain.invoke({"topic":"AI"})
+print(result)
