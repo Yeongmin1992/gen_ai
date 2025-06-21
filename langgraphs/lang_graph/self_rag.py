@@ -10,6 +10,7 @@ from langchain_community.document_loaders import WebBaseLoader
 from langchain_chroma import Chroma
 from langchain_openai import OpenAIEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+from pprint import pprint
 
 urls = [
     "https://lilianweng.github.io/posts/2023-06-23-agent/",
@@ -330,3 +331,81 @@ def grade_generation_v_documents_and_question(state):
         {"documents": documents, "generation": generation}
     )
     grade = score.binary_score
+
+    # check hallucination
+    # hallucination grade가 yes라고 하는 것. 즉, 올바르게 답변이 생성된 경우
+    if grade == "yes":
+        print("---DECISION: GENRATION IS GROUNDED IN DOCUMENTS")
+        # Check question-answering
+        print("---GRADE GENERATION vs QUESTION---")
+        score = answer_grader.invoke({"question":question, "generation": generation})
+        grade = score.binary_score
+        if grade == "yes":
+            print("---DECISION: GENERATION ADDRESSES QUESTION---")
+            return "useful"
+        else:
+            print("---DECISION: GENERATION DOES NOT ADDRESS QUESTION---")
+            return "not useful"
+    else:
+        pprint("---DECISION: GENERATION IS NOT GROUNDED IN DOCUMENTS, RE-TRY--")
+        return "not supported"
+    
+# 그래프 구축하기
+from langgraph.graph import END, StateGraph, START
+
+workflow = StateGraph(GraphState)
+
+# Define the nodes
+workflow.add_node("retrieve", retrieve) # retrieve
+workflow.add_node("grade_documents", grade_documents) # grade documents
+workflow.add_node("generate", generate) # generate
+workflow.add_node("transform_query", transform_query) # transform_query
+
+# Build graph
+workflow.add_edge(START, "retrieve")
+workflow.add_edge("retreive", "grade_documents")
+workflow.add_conditional_edges(
+    "grade_documents",
+    decide_to_generate,
+    {
+        "transform_query": "transform_query",
+        "generate": "generate"
+    }
+)
+workflow.add_edge("transfrom_query", "retrieve")
+workflow.add_conditional_edges(
+    "generate",
+    grade_generation_v_documents_and_question,
+    {
+        "not supported": "generate",
+        "useful": END,
+        "not useful": "transform_query"
+    }
+)
+
+# Compile
+app = workflow.compile()
+
+# 그래프 시각화
+
+from IPython.display import Image, display
+
+try:
+    display(Image(app.get_graph(xray=True).draw_mermaid_png()))
+except Exception:
+    # This requires some extra dependencies and is optional
+    pass
+
+
+# Run
+input = {"question": "Explain how the different types of agent memory work?"}
+for output in app.stream(inputs):
+    for key, value in output.items():
+        # Node
+        print(f"Node '{key}':")
+        # Optional: print full state at each node
+        # pprint.pprint(value["keys"], indent=2, width=80, depth=None)
+    print("\n---\n")
+
+# Final generation
+print(value["generation"])
