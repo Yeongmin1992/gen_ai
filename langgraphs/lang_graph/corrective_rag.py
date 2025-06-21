@@ -1,10 +1,13 @@
-"""
-Self Rag
+#### Corrective rag
+# 기본적으로 사용자의 질문에 대해 답하기 위해 VectorDB 내 문서를 검색.
+# 만약 검색된 문서 중 몇몇이 사용자 질문과 관련 없는 경우, 사용자의 질문을 재작성하고 이를 기반으로 웹 검색 활용하여 추가 데이터 확보
 
-3개의 분기(관련성 검토, 환각 검토, 답변 적절성 검토)로 사용자의 질문에 더 제대로된 답변을 할 수 있음
-관련된 문서를 찾을 수 없거나 답변이 적절치 않은 경우 쿼리를 재작성, 환각 발새한 경우 LLM 답변 재작성
-agentic rag와 다르게 vector db 검색 필요성 여부를 검토하지 않고 반드시 vector db 검색을 전제로 함 
-"""
+from dotenv import load_dotenv
+
+# open ai key랑 tavily api key 필요
+load_dotenv()
+
+# WebBaseLoasder로 웹페이지 내 텍스트를 Vector DB로 저장하고 Retrevier로 만들기
 
 from langchain_community.document_loaders import WebBaseLoader
 from langchain_chroma import Chroma
@@ -28,9 +31,9 @@ text_splitter = RecursiveCharacterTextSplitter.from_tiktoken_encoder(
 )
 
 doc_splits = text_splitter.split_documents(docs_list)
-chroma = Chroma()
+
 # Add to vectorDB
-vectorstore = chroma.from_documents(
+vectorstore = Chroma.from_documents(
     documents=doc_splits,
     collection_name="rag-chroma",
     embedding=OpenAIEmbeddings
@@ -51,11 +54,11 @@ class GradeDocuments(BaseModel):
 
 # LLM with function call
 llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+question = "agent memory"
 structured_llm_grader = llm.with_structured_output(GradeDocuments)
 
 # Prompt
 system = """You are a grader assessing relevance of a retrieved document to a user question. \n
-    It does not need to be a stringent test. The goal is to filter out errorneous retrievals. \n
     If the document contains keyword(s) or semantic meaning related to the user question, grade it as relevant. \n
     Give a binary score 'yes' or 'no' score to indicate whether the document is relevant to the question."""
 
@@ -67,12 +70,9 @@ grade_prompt = ChatPromptTemplate.from_messages(
 )
 
 retrieval_grader = grade_prompt | structured_llm_grader
-question = "agent memory"
-docs = retriever.get_relevant_documents(question)
-doc_txt = docs[1].page_content
-print(retrieval_grader.invoke({"question": question, "document": doc_txt}))
 
-# 답변을 생성하는 chain 정의하기
+# 답변 작성 chain 정의하기
+
 from langchain import hub
 from langchain_core.output_parsers import StrOutputParser
 
@@ -89,93 +89,34 @@ def format_docs(docs):
 # Chain
 rag_chain = prompt | llm | StrOutputParser()
 
-# Run
-generation = rag_chain.invoke({"context": docs, "question": question})
-print(generation)
 
-# 환각 검토 Chain 정의하기
-
-### Hallucination Grader
-
-# Data Model
-class GradeHallucination(BaseModel):
-    """Binary score for hallucination present in generation answer."""
-    binary_score: str = Field(
-        description="Answer is grounded in the facts, 'yes' or 'no'"
-    )
-
-# LLm with function call
-llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
-structured_llm_grader = llm.with_structured_output(GradeHallucination)
-
-# Prompt
-system = """You are a grader assessing whether an LLM generation is grounded in / supported by a set of retreived facts. \n
-    Give a binary score 'yes' or 'no'. 'Yes' means that the answer is grounded in / supported by the set of facts."""
-hallucination_prmpt = ChatPromptTemplate.from_messages(
-    [
-        ("system", system),
-        ("human", "Set of facts: \n\n {documents} \n\n LLM generation: {generation}")
-    ]
-)
-
-hallucination_grader = hallucination_prmpt | structured_llm_grader
-hallucination_grader.invoke({"documents": docs, "generation": generation})
-
-# 답변 적절성 검토 Chain 정의하기
-
-### Anser Grader
-
-# Data Model
-class GradeAnswer(BaseModel):
-    """Binary score to assess answer addresses question."""
-
-    binary_score:str = Field(
-        description="Answer addresses the question, 'yes' or 'no'"
-    )
-
-# LLM with fucntion call
-llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
-structured_llm_grader = llm.with_structured_output(GradeAnswer)
-
-# Prompt
-system = """You are a grader assessing whether an answer addresses / resolves a question \n
-    Give a binary score 'yes' or 'no'. Yes means that the answer resolves the question."""
-answer_prompt = ChatPromptTemplate.from_messages(
-    [
-        ("system", system),
-        ("human", "User question: \n\n {question} \n\n LLM generation: {generation}")
-    ]
-)
-
-answer_grader = answer_prompt | structured_llm_grader
-answer_grader.invoke({"question": question, "generation": generation})
-
-# 질문 재작성 Chain 정의하기
-
-### Question Re-writer
-
-# LLM
+# 질문 재작성 chain 정의
 llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
 
 # Prompt
 system = """You are a question re-writer that converts an input question to a better version that is optimized \n
-    for vectorstore retrueval. Look at the input and try to reason about the underlying semantic intent / meaning."""
-
+            for web search. Look at the unput and try to reason about the underlying semantic intent / meaning."""
 re_write_prompt = ChatPromptTemplate.from_messages(
     [
-        ("system". system),
-        (
+        ("system", system),
+        {
             "human",
             "Here is the initial question: \n\n {question} \n Formulate an improved question."
-        )
+        }
     ]
 )
 
 question_rewriter = re_write_prompt | llm | StrOutputParser()
 question_rewriter.invoke({"question": question})
 
-# GraphState 정의하기
+# 웹 검색 툴 설정
 
+from langchain_community.tools.tavily_search import TavilySearchResults
+
+# k값은 웹검색 결과를 몇개 가져올 것인가
+web_search_tool = TavilySearchResults(k=3)
+
+# GraphState 정의하기
 from typing import List
 from typing_extensions import TypedDict
 
@@ -186,15 +127,17 @@ class GraphState(TypedDict):
     Attributes:
         question: question
         generation: LLM generation
+        web_search: whether to add search
         documents: list of documents
     """
 
     question: str
     generation: str
+    web_search: str
     documents: List[str]
 
-# 위에서 정의한 chain을 기반으로 노드 함수 정의하기
-### Nodes
+# 위에서 정의한 Chain을 기반으로 노드 함수 정의하기
+from langchain.schema import Document
 
 def retrieve(state):
     """
@@ -204,14 +147,15 @@ def retrieve(state):
         state (dict): The current graph state
 
     Returns:
-        state (dict): New key added to state, documents, that contains retreived documents
+        state (dict): New key added to state, documents, that contains retrieved documents
     """
     print("---RETRIEVE---")
-    questoin = state["question"]
+    question = state["question"]
 
-    # Retrieval
+    # Retreval
     documents = retriever.get_relevant_documents(question)
-    return {"document": documents, "question": question}
+    return {"documents": documents, "question": question}
+
 
 def generate(state):
     """
@@ -248,6 +192,7 @@ def grade_documents(state):
 
     # score each doc
     filtered_docs = []
+    web_search = "No"
     # filtered_docs에 관련있는 문서만 담기
     for d in documents:
         score = retrieval_grader.invoke(
@@ -259,9 +204,10 @@ def grade_documents(state):
             filtered_docs.append(d)
         else:
             print("---GRADE: DOCUMENT NOT RELAVANT---")
+            web_search = "Yes"
             continue
 
-    return {"documents": filtered_docs, "question": question}
+    return {"documents": filtered_docs, "question": question, "web_search": web_search}
 
 def transform_query(state):
     """
@@ -282,11 +228,33 @@ def transform_query(state):
     better_question = question_rewriter.invoke({"question": question})
     return {"documents": documents, "question": better_question}
 
-# Edges
+# 위에서 더 나아진 질문은 여기서 사용됨
+def web_search(state):
+    """
+    Web search based on the re-phrased question.
+
+    Args:
+        state (dict): The current graph state
+
+    Returns:
+        state (dict): Updates documents key with appended web results 
+    """
+
+    print("---WEB SEARCH---")
+    question = state["question"]
+    documents = state["documents"]
+
+    # Web search
+    docs = web_search_tool.invoke({"query": question})
+    web_results = "\n".join([d["content"] for d in docs])
+    web_results = Document(page_content=web_results)
+    documents.append(web_results)
+
+    return {"documents": documents, "question": question}
 
 def decide_to_generate(state):
     """
-    Determins whether to generate an answer or ge-generate a question.
+    Determinse whether to generate an answer, or re-generate a question.
 
     Args:
         state (dict): The current graph state
@@ -296,60 +264,22 @@ def decide_to_generate(state):
     """
 
     print("---ASSESS GRADED DOCUMENTS---")
-    state["question"]
-    filtered_documents = state["documents"]
+    web_search = state["web_search"]
 
-    if not filtered_documents:
-        # All documents have been filtered check_relavance
+    # 모든 도큐먼트가 관련있지 않는 함 타게 되고, 관련 있는 도큐먼트와 웹 검색 결과가 합쳐져서 답변 나가게 됨
+    if web_search == "Yes":
+        # All documents have been filtered check_relevance
         # We will re-generate a new query
         print(
-            "---DECISION: ALL DOCUMENTS ARE NOT RELEVANT TO QEUSTION, TRANSFORM QUERY---"
+            "---DECISION: ALL DOCUMENTS ARE NOT RELEVANT TO QUESTION, TRANSFROM QUERY---"
         )
-        return "trnasform_query"
+        return "transform_query"
     else:
-        # We have relevant documents, so generate naswer
+        # We have relavant documents, so generate answer
         print("---DECISION: GENERATE---")
         return "generate"
     
-def grade_generation_v_documents_and_question(state):
-    """
-    Determins wheter the generation is grounded in the document and answers question.
 
-    Args:
-        state (dict): The current graph state
-
-    Returns:
-        str: Decision for next node to call
-    """
-
-    print("---CHECK HALLUCINATIONS---")
-    question = state["question"]
-    documents = state["documents"]
-    generation = state["generation"]
-
-    score = hallucination_grader.invoke(
-        {"documents": documents, "generation": generation}
-    )
-    grade = score.binary_score
-
-    # check hallucination
-    # hallucination grade가 yes라고 하는 것. 즉, 올바르게 답변이 생성된 경우
-    if grade == "yes":
-        print("---DECISION: GENRATION IS GROUNDED IN DOCUMENTS")
-        # Check question-answering
-        print("---GRADE GENERATION vs QUESTION---")
-        score = answer_grader.invoke({"question":question, "generation": generation})
-        grade = score.binary_score
-        if grade == "yes":
-            print("---DECISION: GENERATION ADDRESSES QUESTION---")
-            return "useful"
-        else:
-            print("---DECISION: GENERATION DOES NOT ADDRESS QUESTION---")
-            return "not useful"
-    else:
-        pprint("---DECISION: GENERATION IS NOT GROUNDED IN DOCUMENTS, RE-TRY--")
-        return "not supported"
-    
 # 그래프 구축하기
 from langgraph.graph import END, StateGraph, START
 
@@ -360,6 +290,7 @@ workflow.add_node("retrieve", retrieve) # retrieve
 workflow.add_node("grade_documents", grade_documents) # grade documents
 workflow.add_node("generate", generate) # generate
 workflow.add_node("transform_query", transform_query) # transform_query
+workflow.add_node("web_search_node", web_search)
 
 # Build graph
 workflow.add_edge(START, "retrieve")
@@ -372,16 +303,9 @@ workflow.add_conditional_edges(
         "generate": "generate"
     }
 )
-workflow.add_edge("transfrom_query", "retrieve")
-workflow.add_conditional_edges(
-    "generate",
-    grade_generation_v_documents_and_question,
-    {
-        "not supported": "generate",
-        "useful": END,
-        "not useful": "transform_query"
-    }
-)
+workflow.add_edge("transfrom_query", "web_search_node")
+workflow.add_edge("web_search_node", "generate")
+workflow.add_edge("generate", END)
 
 # Compile
 app = workflow.compile()
@@ -396,9 +320,8 @@ except Exception:
     # This requires some extra dependencies and is optional
     pass
 
-
 # Run
-inputs = {"question": "Explain how the different types of agent memory work?"}
+inputs = {"question": "What are the types of agent memory?"}
 for output in app.stream(inputs):
     for key, value in output.items():
         # Node
