@@ -37,6 +37,7 @@ After you are able to discern all the information, call the relevant tool."""
 def get_messages_info(messages):
     return [SystemMessage(content = template)] + messages
 
+# 클래스 변수 4가지를 output으로 만들어 줘야 한다는 것을 LLM에게 명확히 인지 시키기 위함
 class PromptInstructions(BaseModel):
     """Instructions on how to prompt the LLM."""
 

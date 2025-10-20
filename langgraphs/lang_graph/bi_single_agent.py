@@ -102,11 +102,13 @@ display(Image(graph.get_graph().draw_mermaid_png()))
 import asyncio
 initial_input = {"messages": [HumanMessage(content="미국의 최근 5개년(~2023) GDP 차트를 그려줄래?")]}
 thread = {"configurable": {"thread_id": "13"}}
-async for chunk in graph.astream(initial_input, thread, stream_mode="updates"):
-    for node, values in chunk.items():
-        print(f"Receiving update from node: '{node}'")
-        print(values)
-        print("\n\n")
+async def stream_async():
+    async for chunk in graph.astream(initial_input, thread, stream_mode="updates"):
+        for node, values in chunk.items():
+            print(f"Receiving update from node: '{node}'")
+            print(values)
+            print("\n\n")
+asyncio.run(stream_async())
 
 # 위에서 thread_id를 주고 memory savor에 저장되도록 하였음으로, 위의 결과값을 가진채로 실행하게 된다.
 async def stream_async():
